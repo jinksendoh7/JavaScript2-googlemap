@@ -1,0 +1,407 @@
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Meteorite Strikes</title>
+
+    <style>
+        /* CSS for year filters*/
+        .yearSpacing {
+            padding: 5px;
+        }
+
+        select {
+            cursor: pointer;
+            display: inline-block;
+            position: relative;
+            font-size: 16px;
+            color: #222;
+            width: 200px;
+            height: 40px;
+        }
+
+        option {
+            /* display: none; */
+            position: absolute;
+            top: 100%;
+            padding-left: 2px;
+            color: #fff;
+            background-color: #000080;
+        }
+
+        fieldset {
+            border: 4px double #000080;
+        }
+
+        /* CSS for table*/
+        #tableOutput {
+            overflow-y: auto;
+            height: 400px;
+            width: 45%;
+            margin: 5px auto;
+        }
+
+        #recordCount{
+           width: 400px;
+            margin: 5px auto;
+            color: #e51400; 
+            font-weight: 700;
+        }
+
+        table {
+            border-collapse: separate;
+            background: #222 url("meteorites3.gif");
+            color: #fff;
+            width: 400px;
+            margin: 5px auto;
+            padding: 10px 80px 10px 80px;
+            text-align: center;
+        }
+
+        td {
+            background: #fff;
+            color: #000;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        /* CSS for button*/
+        button {
+            align-items: center;
+            background-color: #0A66C2;
+            border: 0;
+            border-radius: 100px;
+            color: #ffffff;
+            display: inline-flex;
+            font-weight: 600;
+            justify-content: center;
+            line-height: 50px;
+            max-width: 480px;
+            min-height: 40px;
+            min-width: 0px;
+            padding: 0px 20px 0 20px;
+            text-align: center;
+            /* margin: auto 30%; */
+            margin: auto 8%;
+        }
+
+        button:hover,
+        button:focus {
+            background-color: #000080;
+            color: #ffffff;
+        }
+
+        button:active {
+            background: #0A66C2;
+            color: rgb(255, 255, 255, .7);
+        }
+
+        /* CSS for MAP*/
+        #map {
+            position: relative !important;
+            height: 70% !important;
+            width: 90% !important;
+            margin: 4px auto !important;
+        }
+
+        .tooltip {
+            min-height: 40px;
+            color: #e51400;
+            font-weight: 800;
+        }
+    </style>
+</head>
+
+<body onload="ShowMeteorites();">
+    <div id="map"></div>
+
+    <div id="selectors" style="width: 400px; margin: 5px auto; padding:10px;">
+        <fieldset>
+            <legend>Select Year to filter data:</legend>
+            <div class="yearSpacing">
+                <label for="ddlMin">Minimum Year:</label>
+                <select name="select" class="form-control" id="ddlMin" onclick="minYearddl();">
+                </select>
+            </div>
+            <div class="yearSpacing">
+                <label for="ddlMax">Maximum Year:</label>
+                <select name="select" class="form-control" id="ddlMax" onclick="maxYearddl();">
+                </select>
+            </div>
+
+            <button role="button" onclick="getFilterRecords();">Show Records</button>
+            <button role="button" onclick="saveFile();">Save File</button>
+        </fieldset>
+    </div>
+    <div id="recordCount">Number of Meteorites recorded:</div>
+    <div id="tableOutput"></div>
+
+
+    <!-- YOU MUST ENTER YOUR API KEY IN THE LINE BELOW-->
+    <script
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBxurII6Tij0T9puvqpWzKxEiefobo3i_o&callback=initMap&v=weekly"
+        defer></script>
+
+    <script type="text/JavaScript">
+        let meteorite_landings_url = "https://data.nasa.gov/resource/y77d-th95.json";
+    
+        //save json data to  arrRecords
+        var arrRecords = [];
+        var max = null; //getting max 
+        var min = null; //getting min
+        var tempArr = []; //holds temporary array use as interchangeably
+      
+        let map = null;
+        //let markers = [];
+        let requestObject = new XMLHttpRequest();
+        let records = [];
+
+        //declare unassigned variable for inclusive years
+        var fromYear = ""; //variable for minimum year
+        var toYear = ""; //variable for maximum year
+
+        //XMLHttpRequest
+        var getJSON = function(url, callback) {
+                requestObject.open('GET', url, true);
+                requestObject.responseType = 'json';
+                requestObject.onload = function() {
+
+                    var status = requestObject.status;
+                    if (status == 200) {
+                        callback(null, requestObject.response);
+                    } else {
+                        callback(status, requestObject.response);
+                    }
+                };
+    
+                requestObject.send();
+                };
+
+        getJSON(meteorite_landings_url,  function(err, data) {
+                if (err != null) {
+                    console.error(err);
+                } else {
+   
+                arrRecords = data;
+                console.log(arrRecords);
+                }
+                
+
+                //to populate to dropdown based on the years existed in the data
+                for (var i = 0; i < arrRecords.length; i++) {
+                var current = arrRecords[i];
+                if (max === null || current.year > max.year) {
+                    max = current; //final max year in the json data
+                }
+                if (min === null || current.year < min.year) {
+                    min = current; //final min year in the json data
+                }
+                }
+                createTable(); //function in creating flex-table to display all records when page loads
+        });
+
+        
+        function initMap() {
+        		map = new google.maps.Map(
+        			document.getElementById("map"), 
+        			{
+        				zoom: 3.0,
+        				center: {lat: 30, lng: 0},
+        			}
+        		);
+
+                //var records = recordSelectedArr.length == 0 ? arrRecords : recordSelectedArr; //if with data means the user already filters thru from & to
+                var infoWindow = new google.maps.InfoWindow();
+                var latlngbounds = new google.maps.LatLngBounds();
+                
+                //drawPin function is added here
+                for (var i = 0; i < tempArr.length; i++) {
+                var data = tempArr[i];
+                var myLatlng = new google.maps.LatLng(data.reclat, data.reclong);
+                var marker = new google.maps.Marker({
+                position: myLatlng,
+                map: map,
+                title: data.name
+            });
+                (function (marker, data) {
+                    google.maps.event.addListener(marker, "click", function (e) {
+                        infoWindow.setContent("<div class='tooltip'>" + data.name + "<br/>" + data.mass + "<br/>" + new Date(data.year).getFullYear() +"</div>");
+                        infoWindow.open(map, marker);
+                    });
+                })(marker, data);
+                latlngbounds.extend(marker.position);
+            }
+        }
+        window.initMap = initMap;
+
+
+        function ShowMeteorites() {
+            initMap(); //load google map at first page loads
+        }
+    
+        
+            //populate the existing years data list to dropdown
+            let minYearddl = () => {
+                let dateDropdown = document.getElementById('ddlMin'); 
+
+                let currentYear = new Date(max.year).getFullYear();    
+                let earliestYear = new Date(min.year).getFullYear();    
+                // console.log(currentYear) 
+                //  console.log(earliestYear) 
+                while (currentYear >= earliestYear) {      
+                    let dateOption = document.createElement('option');          
+                    dateOption.text = currentYear;      
+                    dateOption.value = currentYear;        
+                    dateDropdown.add(dateOption);      
+                    currentYear -= 1;    
+                }
+
+                //prevent appending list on every click
+                 dateDropdown.addEventListener("click", function() {
+                    dateDropdown.length = new Date(max.year).getFullYear() - earliestYear;
+                    });
+            }
+
+            
+
+
+            //populate the existing years data list to dropdown
+             let maxYearddl = () => {
+                let dateDropdown1 = document.getElementById('ddlMax'); 
+                    let currentYear = new Date(max.year).getFullYear();    
+                    let earliestYear = new Date(min.year).getFullYear(); 
+                    while (currentYear >= earliestYear) {      
+                        let dateOption = document.createElement('option');          
+                        dateOption.text = currentYear;      
+                        dateOption.value = currentYear;        
+                        dateDropdown1.add(dateOption);      
+                        currentYear -= 1;    
+                    }
+
+                    //prevent appending list on every click
+                    dateDropdown1.addEventListener("click", function() {
+                    dateDropdown1.length = new Date(max.year).getFullYear() - earliestYear;
+                    });
+
+        
+                    //validate for max year > min year
+                    fromYear = document.getElementById('ddlMin').value;
+                    toYear = document.getElementById('ddlMax').value;
+                    if(Number(toYear) < Number(fromYear)){
+                        alert("Maximum Year should be greater than " + fromYear);
+                        document.getElementById('ddlMax').value = null;
+                        toYear = null;
+                    }
+            }
+
+
+            function createTable() {
+                //used to clear div innerhtml since table create is called again on every currency onchange
+                document.getElementById("tableOutput").innerHTML = "";
+    
+                //create table to display records
+                var myTableDiv = document.getElementById("tableOutput");
+                var table = document.createElement('TABLE');
+    
+                // Create an empty <thead> element and add it to the table:
+                var tableHead = document.createElement('THEAD');
+                table.appendChild(tableHead);
+    
+                //format  thead
+                var theadArr = ["ID", "Name", "Year", "Class"];
+                var th = document.createElement('TR');
+                th.style.backgroundColor = "#e51400";
+
+                tableHead.appendChild(th);
+                for (var j = 0; j < theadArr.length; j++) {
+                    var td = document.createElement('TD');
+                    td.width = "auto";
+                    td.appendChild(document.createTextNode(theadArr[j]));
+                    th.appendChild(td);
+                }
+    
+                //format tbody
+                var tableBody = document.createElement('TBODY');
+                tableBody.id = "tablebody";
+			    table.appendChild(tableBody);
+
+
+                tempArr = []; //holds temporary array use as interchangeably
+                tempArr = recordSelectedArr.length == 0 ? arrRecords : recordSelectedArr; //if with data means the user already filters thru from & to
+
+                //display how many records are retrieved
+                document.getElementById("recordCount").innerHTML = "Number of Meteorites recorded: " + tempArr.length;
+
+                //add rows in tbody
+                for (var i = 0; i < tempArr.length; i++) {
+                    var tr = document.createElement('TR');
+                    tr.style.textAlign = "center";
+                    tableBody.appendChild(tr);
+    
+                    for (var j = 0; j < theadArr.length; j++) {
+                        var td = document.createElement('TD');
+                        td.style.padding = "10px";
+                        td.width = '100';
+                        if (theadArr[j] === "ID") {
+                            td.appendChild(document.createTextNode(tempArr[i].id));
+                        } else if (theadArr[j] === "Name") {
+                            td.appendChild(document.createTextNode(tempArr[i].name))
+                        } else if (theadArr[j] === "Year") {
+                            td.appendChild(document.createTextNode(new Date(tempArr[i].year).getFullYear()))
+                        } else if (theadArr[j] === "Class") {
+                            td.appendChild(document.createTextNode(tempArr[i].recclass))
+                        } 
+                        tr.appendChild(td);
+                    }
+                }
+                myTableDiv.appendChild(table);
+            }
+  
+
+        //get min and max years
+        let getInclusiveYears = () => {
+            return {
+                fromYear: document.getElementById('ddlMin').value,
+                toYear: document.getElementById('ddlMax').value
+            };
+        }
+
+        var recordSelectedArr = []; //array based on from and to year
+        let getFilterRecords = function(x,y){
+            recordSelectedArr = getFilterByYear(getInclusiveYears().fromYear, getInclusiveYears().toYear);
+            createTable();
+            initMap(); //reload google map
+        }
+
+
+        let getFilterByYear = (fromYear, toYear) => arrRecords
+        .filter(({
+            year
+            }) => {
+            // get year from date
+            //let [years] = (year || '').match(/\d{4}/g) || [];
+            let [years] = (year || '').match(/\d{4}/g) || [];
+            // convert to number
+            years = +years;
+        
+            /**
+             1. checks if year is valid
+            2. if fromYear is not specified returns true, otherwise checks if year is greater than or equal fromYear
+            3. if toYear is not specified returns true, otherwise checks if year is less than or equal toYear
+            */
+            return years && (!fromYear || years >= fromYear) && (!toYear || years <= toYear);
+        });
+
+        //export filtered file to txt format
+        function saveFile(){
+            let save = document.createElement('a');
+            save.href = "data:application/octet-stream,"+encodeURIComponent(JSON.stringify(tempArr));
+            save.download = 'NASA Meteorite data '+ fromYear +'-'+ toYear +'.json';
+            save.click();
+        }
+
+    </script>
+</body>
+</html>
